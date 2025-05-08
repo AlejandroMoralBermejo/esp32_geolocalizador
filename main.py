@@ -1,31 +1,22 @@
 import machine
 import network
 import time
-import urequests  # Necesario para hacer la petición HTTP POST
+import urequests 
 
 # Configuración de UART
 TX_PIN = 26
 RX_PIN = 27
-BAUDRATE = 115200  # Baudrate actualizado
+BAUDRATE = 115200  
 TIMEOUT = 3000
 
-# Configuración WiFi
+# Configuración Credenciales WiFI
 SSID = "alex"
 PASSWORD = "atc-gaac"
 
-# Endpoint a donde se enviarán los datos
+# Endpoint de la API para mandar el registro
 ENDPOINT = "http://192.168.175.237:8000/api/registros/"
 
-print("🚀 Inicializando comunicación UART...")
-
-try:
-    uart = machine.UART(2, baudrate=BAUDRATE, tx=TX_PIN, rx=RX_PIN, timeout=TIMEOUT)
-    print("✅ UART inicializada correctamente.")
-except Exception as e:
-    print(f"❌ Error al inicializar UART: {e}")
-    while True:
-        pass  # Detener si hay fallo en UART
-
+# Función para enviar comandos AT al módulo GNSS
 def enviar_comando(comando, espera=5):
     """Envía un comando AT y devuelve la respuesta decodificada."""
     try:
@@ -45,6 +36,7 @@ def enviar_comando(comando, espera=5):
         print(f"❌ Error enviando comando {comando}: {e}")
         return ""
 
+# Función para limpiar los datos GNSS
 def limpiar_datos_gnss(datos_gnss):
     """
     Extrae la línea válida de datos GNSS (la que comienza con '+CGPSINFO:')
@@ -55,31 +47,22 @@ def limpiar_datos_gnss(datos_gnss):
             return linea.replace("+CGPSINFO: ", "").strip()
     raise Exception("No se encontró línea válida con +CGPSINFO:")
 
-
+# Función para enviar el registro al endpoint de la API
 def post_registro(datos_gnss):
-    """Extrae la fecha y coordenadas del mensaje GNSS y envía un POST al endpoint."""
+    """Extrae la fecha mensaje GNSS y envía un POST al endpoint."""
     try:
+
         datos_gnss = limpiar_datos_gnss(datos_gnss)
+        # Separo los datos GNSS por las comas
         partes = datos_gnss.split(',')
         if len(partes) < 6:
             raise Exception("Formato de datos GNSS incorrecto.")
         
-        lat = partes[0].strip()
-        ns = partes[1].strip()
-        lon = partes[2].strip()
-        ew = partes[3].strip()
+        # Rescato los datos necesarios para la hora y fecha
         fecha_raw = partes[4].strip()
         hora_raw = partes[5].strip()
 
-        if not lat or not lon or not fecha_raw or not hora_raw:
-            raise Exception("Datos incompletos o vacíos en la cadena GNSS.")
-
-        lat_decimal = float(lat[:2]) + float(lat[2:])/60
-        if ns == 'S': lat_decimal = -lat_decimal
-
-        lon_decimal = float(lon[:3]) + float(lon[3:])/60
-        if ew == 'W': lon_decimal = -lon_decimal
-
+        # Le pongo el formato correcto a la fecha y hora
         dia = fecha_raw[0:2]
         mes = fecha_raw[2:4]
         año = "20" + fecha_raw[4:6]
@@ -88,8 +71,7 @@ def post_registro(datos_gnss):
         segundo = hora_raw[4:6]
         fecha_formateada = f"{año}-{mes}-{dia}T{hora}:{minuto}:{segundo}"
 
-        coordenadas = f"{lat_decimal},{lon_decimal}"
-
+        # Armo el cuerpo del POST
         cuerpo = {
             "fecha": fecha_formateada,
             "coordenadas": datos_gnss,
@@ -99,6 +81,7 @@ def post_registro(datos_gnss):
         print("📤 Enviando POST con el siguiente cuerpo:")
         print(cuerpo)
 
+        # Envío el POST al endpoint y devuelvo la respuesta para depuración 
         respuesta = urequests.post(
             ENDPOINT,
             json=cuerpo,
@@ -114,12 +97,13 @@ def post_registro(datos_gnss):
     finally:
         print("🔚 Finalizado envío de registro.")
 
+# Función para inicializar y configurar el GNSS (Geolocalizador)
 def inicializar_gnss():
     """Inicializa y configura el GNSS correctamente."""
     try:
         print("Comprobar AT...")
         respuesta = enviar_comando("AT")
-        
+        # Primero compruebo que es capaz de analizar comandos AT        
         if "OK" not in respuesta and "CPIN: SIM REMOVED" not in respuesta:
             print("❌ Error al comprobar AT.")
             return
@@ -139,6 +123,7 @@ def inicializar_gnss():
             print("❌ Error al activar GNSS.")
             return
 
+        # Aqui espero 5 minutos para estabilizar la señal y poder rescatar datos
         print("⌛ Esperando hasta 5 minutos para estabilizar la señal...")
         for i in range(10):  
             time.sleep(30)  
@@ -152,7 +137,7 @@ def inicializar_gnss():
 
         print("📡 Obteniendo datos GNSS...")
         datos_gnss = enviar_comando("AT+CGPSINFO", espera=10)
-
+        # En el caso de que no de error se envia a la función POST 
         if "ERROR" in datos_gnss or ",,,,,,,," in datos_gnss:
             print("❌ No se pudo obtener datos GNSS.")
         else:
@@ -163,12 +148,14 @@ def inicializar_gnss():
         print(f"❌ Error en la inicialización del GNSS: {e}")
 
     finally:
+        # Al final siempre apago el GNSS y limpio los recursos
         print("🧹 Apagando GNSS y limpiando recursos...")
-        enviar_comando("AT+CGNSSPWR=0", espera=2)  # Apagar GNSS
+        enviar_comando("AT+CGNSSPWR=0", espera=2)  
         print("✅ GNSS apagado correctamente.")
-        uart.deinit()  # Desactivar UART
+        uart.deinit() 
         print("✅ UART liberada. Fin del programa.")
 
+# F
 def conectar_wifi():
     """Conecta la ESP32 a una red WiFi."""
     try:
@@ -193,7 +180,19 @@ def conectar_wifi():
             print("🛑 Apagando WiFi para evitar bloqueos.")
             wlan.active(False)
 
-# Ejecutar inicialización con protección
+
+print("🚀 Inicializando comunicación UART...")
+
+# Inicializo la UART 
+try:
+    uart = machine.UART(2, baudrate=BAUDRATE, tx=TX_PIN, rx=RX_PIN, timeout=TIMEOUT)
+    print("✅ UART inicializada correctamente.")
+except Exception as e:
+    print(f"❌ Error al inicializar UART: {e}")
+    while True:
+        pass  # Detener si hay fallo en UART
+
+# Ahora me conecto a WiFi y luego inicializo el GNSS
 try:
     if conectar_wifi():
         inicializar_gnss()
