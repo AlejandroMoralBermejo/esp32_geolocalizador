@@ -10,11 +10,11 @@ BAUDRATE = 115200  # Baudrate actualizado
 TIMEOUT = 3000
 
 # Configuración WiFi
-SSID = "MiFibra-7DE0"
-PASSWORD = "zSZFh2Va"
+SSID = "alex"
+PASSWORD = "atc-gaac"
 
 # Endpoint a donde se enviarán los datos
-ENDPOINT = "http://192.168.2.25:8000/api/registros/"
+ENDPOINT = "http://192.168.175.237:8000/api/registros/"
 
 print("🚀 Inicializando comunicación UART...")
 
@@ -45,29 +45,40 @@ def enviar_comando(comando, espera=5):
         print(f"❌ Error enviando comando {comando}: {e}")
         return ""
 
+def limpiar_datos_gnss(datos_gnss):
+    """
+    Extrae la línea válida de datos GNSS (la que comienza con '+CGPSINFO:')
+    y elimina el prefijo innecesario.
+    """
+    for linea in datos_gnss.splitlines():
+        if linea.startswith("+CGPSINFO:"):
+            return linea.replace("+CGPSINFO: ", "").strip()
+    raise Exception("No se encontró línea válida con +CGPSINFO:")
+
+
 def post_registro(datos_gnss):
     """Extrae la fecha y coordenadas del mensaje GNSS y envía un POST al endpoint."""
     try:
+        datos_gnss = limpiar_datos_gnss(datos_gnss)
         partes = datos_gnss.split(',')
         if len(partes) < 6:
             raise Exception("Formato de datos GNSS incorrecto.")
         
-        # Procesar latitud y longitud
         lat = partes[0].strip()
         ns = partes[1].strip()
         lon = partes[2].strip()
         ew = partes[3].strip()
+        fecha_raw = partes[4].strip()
+        hora_raw = partes[5].strip()
 
-        #artes = datos_gnss.split(',') Convertir latitud y longitud a formato decimal
+        if not lat or not lon or not fecha_raw or not hora_raw:
+            raise Exception("Datos incompletos o vacíos en la cadena GNSS.")
+
         lat_decimal = float(lat[:2]) + float(lat[2:])/60
         if ns == 'S': lat_decimal = -lat_decimal
 
         lon_decimal = float(lon[:3]) + float(lon[3:])/60
         if ew == 'W': lon_decimal = -lon_decimal
-
-        # Procesar fecha y hora
-        fecha_raw = partes[4].strip()  
-        hora_raw = partes[5].strip()   
 
         dia = fecha_raw[0:2]
         mes = fecha_raw[2:4]
@@ -77,29 +88,27 @@ def post_registro(datos_gnss):
         segundo = hora_raw[4:6]
         fecha_formateada = f"{año}-{mes}-{dia}T{hora}:{minuto}:{segundo}"
 
-        # Crear coordenadas en formato adecuado
         coordenadas = f"{lat_decimal},{lon_decimal}"
 
-        # Preparar los datos para enviar
         cuerpo = {
             "fecha": fecha_formateada,
-            "coordenadas": coordenadas,
+            "coordenadas": datos_gnss,
             "dispositivo_id": 1
         }
 
         print("📤 Enviando POST con el siguiente cuerpo:")
         print(cuerpo)
-        
-        # Enviar la solicitud POST
+
         respuesta = urequests.post(
-            ENDPOINT, 
-            json=cuerpo, 
+            ENDPOINT,
+            json=cuerpo,
             headers={"Content-Type": "application/json"}
-            )
-        
+        )
+
         print("✅ POST enviado. Código de estado:", respuesta.status_code)
         print(respuesta.text)
         respuesta.close()
+
     except Exception as e:
         print("❌ Error realizando POST:", e)
     finally:
