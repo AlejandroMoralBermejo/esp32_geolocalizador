@@ -6,6 +6,8 @@ Proyecto de geolocalización con ESP32 y módulo GPS utilizando MicroPython.
 
 Este proyecto permite obtener y mostrar las coordenadas geográficas (latitud y longitud) utilizando una placa ESP32 conectada a un módulo GPS (como el NEO-6M). El sistema se programa utilizando MicroPython, lo que permite ejecutar scripts ligeros directamente en el microcontrolador.
 
+Nota: Las credenciales Wifi que están son de ejemplo, debes cambiarlas por las tuyas en caso de que utilizes wifi
+
 ## 🔧 Hardware requerido
 
 - Placa ESP32
