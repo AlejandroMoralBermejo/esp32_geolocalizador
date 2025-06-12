@@ -194,10 +194,17 @@ except Exception as e:
 
 # Ahora me conecto a WiFi y luego inicializo el GNSS
 try:
-    if conectar_wifi():
-        inicializar_gnss()
-    else:
-        print("⛔ GNSS no se ejecutará porque no hay conexión WiFi.")
+    while True:
+        sleep_time_ms = 10 * 60 * 1000
+
+        if conectar_wifi():
+            inicializar_gnss()
+        else:
+            print("⛔ GNSS no se ejecutará porque no hay conexión WiFi.")
+
+        # Entra en deep sleep
+        machine.deepsleep(sleep_time_ms)
+    
 except Exception as e:
     print(f"❌ Error fatal: {e}")
 finally:
